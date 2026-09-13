@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Statistik Kependudukan Terpadu - Kelurahan Pager</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS for Excel handling -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 500: '#2563eb', 600: '#1d4ed8' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; color: black !important; }
+            .print-area { box-shadow: none !important; border: none !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 font-sans text-slate-800 dark:text-slate-100 antialiased min-h-screen flex flex-col items-center justify-start p-4 sm:p-6 lg:p-8 transition-colors duration-300">
+
+    <!-- NOTIFICATION TOAST POPUP -->
+    <div id="toastNotification" class="fixed top-5 right-5 z-50 transform translate-y-[-200%] transition-transform duration-300 ease-in-out">
+        <div id="toastContent" class="flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl text-xs font-semibold text-white bg-slate-900 dark:bg-slate-800 border border-slate-700">
+            <i id="toastIcon" data-lucide="check-circle" class="w-5 h-5 shrink-0"></i>
+            <span id="toastMessage">Notifikasi berhasil!</span>
+        </div>
+    </div>
+
+    <!-- MAIN CONTAINER -->
+    <div class="max-w-7xl w-full mx-auto space-y-6">
+        
+        <!-- HEADER / NAVIGATION BAR KHUSUS STATISTIK -->
+        <header class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-colors duration-300">
+            <div>
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-md shadow-blue-500/20">KP</div>
+                    <span class="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest bg-blue-50 dark:bg-blue-950/50 border border-blue-100 dark:border-blue-900/50 px-2.5 py-1 rounded-md">KELURAHAN PAGER</span>
+                </div>
+                <h1 class="text-2xl font-bold text-slate-900 dark:text-white mt-2">Halaman Statistik Kependudukan Terpadu</h1>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Ringkasan analitik dan grafik distribusi data kependudukan terpadu.</p>
+            </div>
+            <div class="flex items-center gap-3 self-stretch sm:self-auto justify-end flex-wrap">
+                <!-- Theme Toggle Button -->
+                <button onclick="toggleTheme()" class="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs p-2.5 rounded-xl shadow-xs transition flex items-center justify-center border border-slate-200 dark:border-slate-700" title="Ubah Tema">
+                    <i id="themeIcon" data-lucide="moon" class="w-4 h-4"></i>
+                </button>
+                <button onclick="triggerExcelImport()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-4 py-2.5 rounded-xl shadow-md shadow-blue-500/20 transition flex items-center gap-1.5">
+                    <i data-lucide="upload" class="w-4 h-4"></i> Import File Data
+                </button>
+                <!-- Hidden file input untuk opsi cadangan import lokal -->
+                <input type="file" id="excelFileStats" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleFileImport(event)">
+            </div>
+        </header>
+
+        <!-- STAT GRID UTAMA -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center gap-4 shadow-sm transition-colors duration-300">
+                <div class="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold border border-blue-100 dark:border-blue-900/50"><i data-lucide="file-text" class="w-5 h-5"></i></div>
+                <div>
+                    <small class="text-slate-400 dark:text-slate-500 text-xs uppercase font-medium">Total KK</small>
+                    <strong id="dashKK" class="block text-xl font-bold text-slate-900 dark:text-white">0</strong>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center gap-4 shadow-sm transition-colors duration-300">
+                <div class="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold border border-emerald-100 dark:border-emerald-900/50"><i data-lucide="users" class="w-5 h-5"></i></div>
+                <div>
+                    <small class="text-slate-400 dark:text-slate-500 text-xs uppercase font-medium">Total Penduduk</small>
+                    <strong id="dashWarga" class="block text-xl font-bold text-slate-900 dark:text-white">0</strong>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center gap-4 shadow-sm transition-colors duration-300">
+                <div class="w-12 h-12 rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold border border-purple-100 dark:border-purple-900/50"><i data-lucide="mars" class="w-5 h-5"></i></div>
+                <div>
+                    <small class="text-slate-400 dark:text-slate-500 text-xs uppercase font-medium">Laki-laki</small>
+                    <strong id="dashLaki" class="block text-xl font-bold text-slate-900 dark:text-white">0</strong>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center gap-4 shadow-sm transition-colors duration-300">
+                <div class="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold border border-amber-100 dark:border-amber-900/50"><i data-lucide="venus" class="w-5 h-5"></i></div>
+                <div>
+                    <small class="text-slate-400 dark:text-slate-500 text-xs uppercase font-medium">Perempuan</small>
+                    <strong id="dashPerempuan" class="block text-xl font-bold text-slate-900 dark:text-white">0</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- STATISTIK DISTRIBUSI PENDUDUK PER RT & KOMPOSISI AGAMA -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm transition-colors duration-300">
+                <div>
+                    <h3 class="font-bold text-slate-900 dark:text-white text-sm">Distribusi Penduduk & Kepadatan per RT</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Perbandingan jumlah KK, Penduduk, Proporsi, & Kepadatan Relatif</p>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400">
+                                <th class="p-2.5">RT</th>
+                                <th class="p-2.5 text-center">KK</th>
+                                <th class="p-2.5 text-center">Penduduk</th>
+                                <th class="p-2.5 text-center">Proporsi (%)</th>
+                                <th class="p-2.5 text-right">Kepadatan Relatif</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableDistribusiRT" class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                            <tr><td colspan="5" class="text-center py-4 text-slate-400 dark:text-slate-500">Memuat data dari server...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm transition-colors duration-300">
+                <div>
+                    <h3 class="font-bold text-slate-900 dark:text-white text-sm">Komposisi Agama Penduduk</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Proporsi penganut agama berdasarkan data keseluruhan</p>
+                </div>
+                <div id="statAgamaContainer" class="space-y-3">
+                    <div class="text-xs text-slate-400 dark:text-slate-500 text-center py-4">Memuat data dari server...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- KELOMPOK UMUR & KELENGKAPAN DATA -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm transition-colors duration-300">
+                <div>
+                    <h3 class="font-bold text-slate-900 dark:text-white text-sm">Distribusi Kelompok Umur</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Analisis kelompok usia penduduk berdasarkan data usia / tanggal lahir</p>
+                </div>
+                <div id="statUmurContainer" class="space-y-3">
+                    <div class="text-xs text-slate-400 dark:text-slate-500 text-center py-4">Memuat data dari server...</div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm transition-colors duration-300">
+                <div>
+                    <h3 class="font-bold text-slate-900 dark:text-white text-sm">Kelengkapan Data Kolom Penting</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Persentase pengisian atribut penting kependudukan</p>
+                </div>
+                <div id="statKelengkapanContainer" class="space-y-3">
+                    <div class="text-xs text-slate-400 dark:text-slate-500 text-center py-4">Memuat data dari server...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- STATISTIK DETAIL PENDIDIKAN -->
+        <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm transition-colors duration-300">
+            <h3 class="font-bold text-slate-900 dark:text-white text-sm">Statistik Pendidikan Terakhir</h3>
+            <div id="statPendidikanContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="text-xs text-slate-400 dark:text-slate-500 text-center py-4 col-span-full">Memuat data dari server...</div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- SCRIPT STATISTIK & INTEGRASI APPS SCRIPT -->
+    <script>
+        let allData = [];
+
+        // Ganti URL di bawah ini dengan URL Web App Google Apps Script Anda yang berakhiran /exec
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyKyMjavSbWQ6D_bAJpkW-YEvzpAFmaalV9dFMt001o1yzk_uenMT5-unLzrxLl8Osq/exec";
+
+        async function loadDataFromAppsScript() {
+            try {
+                const response = await fetch(WEB_APP_URL);
+                const result = await response.json();
+                
+                if (Array.isArray(result)) {
+                    allData = result.map(d => {
+                        const obj = {};
+                        Object.keys(d).forEach(k => {
+                            obj[k.trim().toUpperCase()] = d[k] !== undefined ? String(d[k]).trim() : '';
+                        });
+                        obj._STATUS_MUTASI = obj.STATUS_MUTASI || 'AKTIF';
+                        return obj;
+                    });
+                    
+                    updateDashboardStats();
+                    showNotification(`Berhasil memuat ${allData.length} data penduduk dari server!`, 'success');
+                } else {
+                    showNotification('Gagal memuat data dari server.', 'error');
+                }
+            } catch (err) {
+                console.error("Gagal terhubung ke server:", err);
+                showNotification('Terjadi kesalahan koneksi ke server Apps Script.', 'error');
+            }
+        }
+
+        function initTheme() {
+            const isDark = document.documentElement.classList.contains('dark');
+            updateThemeIcon(isDark);
+        }
+
+        function toggleTheme() {
+            const htmlEl = document.documentElement;
+            htmlEl.classList.toggle('dark');
+            const isDark = htmlEl.classList.contains('dark');
+            updateThemeIcon(isDark);
+        }
+
+        function updateThemeIcon(isDark) {
+            const iconEl = document.getElementById('themeIcon');
+            if(iconEl) {
+                iconEl.setAttribute('data-lucide', isDark ? 'sun' : 'moon');
+                if(window.lucide) lucide.createIcons();
+            }
+        }
+
+        function showNotification(message, type = 'success') {
+            const toast = document.getElementById('toastNotification');
+            const content = document.getElementById('toastContent');
+            const msgEl = document.getElementById('toastMessage');
+            const iconEl = document.getElementById('toastIcon');
+
+            if(!toast || !content || !msgEl) return;
+            msgEl.innerText = message;
+            if(type === 'success') {
+                content.className = "flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl text-xs font-semibold text-white bg-emerald-600 border border-emerald-500";
+                iconEl.setAttribute('data-lucide', 'check-circle');
+            } else {
+                content.className = "flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl text-xs font-semibold text-white bg-rose-600 border border-rose-500";
+                iconEl.setAttribute('data-lucide', 'alert-circle');
+            }
+            if(window.lucide) lucide.createIcons();
+
+            toast.classList.remove('translate-y-[-200%]');
+            toast.classList.add('translate-y-0');
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0');
+                toast.classList.add('translate-y-[-200%]');
+            }, 3500);
+        }
+
+        function triggerExcelImport() {
+            document.getElementById('excelFileStats').click();
+        }
+
+        function handleFileImport(e) {
+            const file = e.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = async function(evt) {
+                try {
+                    const data = new Uint8Array(evt.target.result);
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, dateNF: 'yyyy-mm-dd' });
+
+                    if(rows.length < 2) {
+                        showNotification('File Excel tidak memiliki data yang cukup.', 'error');
+                        return;
+                    }
+
+                    const headers = rows[0].map(h => String(h || '').trim().toUpperCase());
+                    const dataRows = rows.slice(1);
+
+                    const parsed = [];
+                    dataRows.forEach(r => {
+                        if(!r || r.length === 0) return;
+                        const obj = {};
+                        headers.forEach((h, idx) => { obj[h] = r[idx] !== undefined ? String(r[idx]).trim() : ''; });
+                        obj._STATUS_MUTASI = obj.STATUS_MUTASI || 'AKTIF';
+                        parsed.push(obj);
+                    });
+
+                    allData = parsed;
+                    updateDashboardStats();
+                    showNotification(`Berhasil memuat ${allData.length} data penduduk (Lokal)!`, 'success');
+                } catch (err) {
+                    console.error(err);
+                    showNotification('Gagal membaca file Excel: ' + err.message, 'error');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function getUmurWarga(d) {
+            const langsungUmur = d["USIA"] || d["UMUR"] || d["UMUR (TAHUN)"] || d["AGE"] || '';
+            if (langsungUmur !== '' && !isNaN(langsungUmur)) {
+                const parsedAge = parseInt(langsungUmur);
+                if (parsedAge >= 0 && parsedAge <= 150) return parsedAge;
+            }
+
+            const tgl = d["TANGGAL LAHIR"] || d["TANGGAL_LAHIR"] || d["TGL_LAHIR"] || d["TANGGAL LAHIR / USIA"] || '';
+            if(!tgl) return null;
+            
+            let birthDate = null;
+            let s = String(tgl).trim();
+            
+            if (!isNaN(s) && Number(s) > 30000) {
+                const excelEpoch = new Date(1899, 11, 30);
+                birthDate = new Date(excelEpoch.getTime() + Number(s) * 86400000);
+            } else {
+                s = s.replace(/-/g, '/');
+                let parts = s.split('/');
+                if(parts.length === 3) {
+                    if(parts[0].length === 4) {
+                        birthDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                    } else if(parts[2].length === 4) {
+                        birthDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+                    }
+                } else {
+                    birthDate = new Date(s);
+                }
+            }
+
+            if(!birthDate || isNaN(birthDate.getTime())) return null;
+            
+            const today = new Date();
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const m = today.getMonth() - birthDate.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            return age >= 0 ? age : null;
+        }
+
+        function updateDashboardStats() {
+            const aktifData = allData.filter(d => (d._STATUS_MUTASI || 'AKTIF') === 'AKTIF');
+            const totalWarga = aktifData.length;
+
+            const kkSet = new Set();
+            aktifData.forEach(d => {
+                const kk = d["NO_KK"] || d.NO_KK;
+                if(kk) kkSet.add(kk);
+            });
+            const totalKK = kkSet.size;
+
+            let totalLaki = 0;
+            let totalPerempuan = 0;
+            aktifData.forEach(d => {
+                const jk = (d["JENIS KELAMIN"] || d.JENIS_KELAMIN || '').toUpperCase();
+                if(jk.includes('LAKI')) totalLaki++;
+                else if(jk.includes('PEREMPUAN') || jk.includes('PER')) totalPerempuan++;
+            });
+
+            document.getElementById('dashKK').innerText = totalKK.toLocaleString();
+            document.getElementById('dashWarga').innerText = totalWarga.toLocaleString();
+            document.getElementById('dashLaki').innerText = totalLaki.toLocaleString();
+            document.getElementById('dashPerempuan').innerText = totalPerempuan.toLocaleString();
+
+            // 1. Distribusi per RT
+            const rtMap = {};
+            aktifData.forEach(d => {
+                const rt = (d["RT"] || '000').padStart(3, '0');
+                if(!rtMap[rt]) rtMap[rt] = { warga: 0, kkSet: new Set() };
+                rtMap[rt].warga++;
+                const kk = d["NO_KK"] || d.NO_KK;
+                if(kk) rtMap[rt].kkSet.add(kk);
+            });
+
+            const sortedRt = Object.keys(rtMap).sort();
+            const tableDist = document.getElementById('tableDistribusiRT');
+            if(sortedRt.length === 0) {
+                tableDist.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-slate-400 dark:text-slate-500">Belum ada data.</td></tr>`;
+            } else {
+                let html = '';
+                sortedRt.forEach(rt => {
+                    const countWarga = rtMap[rt].warga;
+                    const countKK = rtMap[rt].kkSet.size;
+                    const proporsi = totalWarga > 0 ? ((countWarga / totalWarga) * 100).toFixed(1) : 0;
+                    html += `<tr class="border-b border-slate-100 dark:border-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td class="p-2.5 font-semibold text-slate-900 dark:text-white">RT ${rt}</td>
+                        <td class="p-2.5 text-center text-slate-700 dark:text-slate-300">${countKK}</td>
+                        <td class="p-2.5 text-center font-bold text-blue-600 dark:text-blue-400">${countWarga}</td>
+                        <td class="p-2.5 text-center text-slate-700 dark:text-slate-300">${proporsi}%</td>
+                        <td class="p-2.5 text-right"><span class="px-2 py-0.5 bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/50 rounded-md font-semibold text-[10px]">${countWarga} Jiwa/RT</span></td>
+                    </tr>`;
+                });
+                tableDist.innerHTML = html;
+            }
+
+            // 2. Komposisi Agama
+            const agamaMap = {};
+            aktifData.forEach(d => {
+                const ag = (d["AGAMA"] || 'TIDAK DIKETAHUI').toUpperCase();
+                agamaMap[ag] = (agamaMap[ag] || 0) + 1;
+            });
+            const agamaContainer = document.getElementById('statAgamaContainer');
+            let agamaHtml = '';
+            Object.keys(agamaMap).sort().forEach(ag => {
+                const cnt = agamaMap[ag];
+                const pct = totalWarga > 0 ? ((cnt / totalWarga) * 100).toFixed(1) : 0;
+                agamaHtml += `<div>
+                    <div class="flex justify-between text-xs mb-1"><span class="font-semibold text-slate-700 dark:text-slate-300">${ag}</span><span class="text-slate-500 dark:text-slate-400">${cnt} jiwa (${pct}%)</span></div>
+                    <div class="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden"><div class="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-500" style="width: ${pct}%"></div></div>
+                </div>`;
+            });
+            agamaContainer.innerHTML = agamaHtml || '<div class="text-xs text-slate-400 dark:text-slate-500 text-center py-4">Belum ada data.</div>';
+
+            // 3. Kelompok Umur
+            const umurGroups = { 'Balita (0-5)': 0, 'Anak-anak (6-12)': 0, 'Remaja (13-18)': 0, 'Dewasa (19-59)': 0, 'Lansia (60+)': 0 };
+            let totalUmurTerbaca = 0;
+
+            aktifData.forEach(d => {
+                const umur = getUmurWarga(d);
+                if(umur !== null) {
+                    totalUmurTerbaca++;
+                    if(umur <= 5) umurGroups['Balita (0-5)']++;
+                    else if(umur <= 12) umurGroups['Anak-anak (6-12)']++;
+                    else if(umur <= 18) umurGroups['Remaja (13-18)']++;
+                    else if(umur <= 59) umurGroups['Dewasa (19-59)']++;
+                    else umurGroups['Lansia (60+)']++;
+                }
+            });
+
+            const umurContainer = document.getElementById('statUmurContainer');
+            let umurHtml = '';
+            Object.keys(umurGroups).forEach(grp => {
+                const cnt = umurGroups[grp];
+                const pct = totalUmurTerbaca > 0 ? ((cnt / totalUmurTerbaca) * 100).toFixed(1) : 0;
+                umurHtml += `<div>
+                    <div class="flex justify-between text-xs mb-1"><span class="font-semibold text-slate-700 dark:text-slate-300">${grp}</span><span class="text-slate-500 dark:text-slate-400">${cnt} jiwa (${pct}%)</span></div>
+                    <div class="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden"><div class="bg-emerald-500 dark:bg-emerald-400 h-2 rounded-full transition-all duration-500" style="width: ${pct}%"></div></div>
+                </div>`;
+            });
+            umurContainer.innerHTML = umurHtml;
+
+            // 4. Kelengkapan Data Kolom Penting
+            const fieldsToCheck = [
+                { key: 'NIK', label: 'NIK Terisi' },
+                { key: 'NO_KK', label: 'Nomor KK Terisi' },
+                { key: 'PEKERJAAN', label: 'Pekerjaan Terisi' },
+                { key: 'PENDIDIKAN', label: 'Pendidikan Terisi' }
+            ];
+            const kelengkapanContainer = document.getElementById('statKelengkapanContainer');
+            let kelHtml = '';
+            fieldsToCheck.forEach(f => {
+                let filled = 0;
+                aktifData.forEach(d => {
+                    const val = d[f.key];
+                    if(val && String(val).trim() !== '' && String(val).trim() !== '-') filled++;
+                });
+                const pct = totalWarga > 0 ? Math.round((filled / totalWarga) * 100) : 0;
+                kelHtml += `<div>
+                    <div class="flex justify-between text-xs mb-1"><span class="font-semibold text-slate-700 dark:text-slate-300">${f.label}</span><span class="text-slate-500 dark:text-slate-400">${pct}%</span></div>
+                    <div class="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden"><div class="bg-purple-600 dark:bg-purple-500 h-2 rounded-full transition-all duration-500" style="width: ${pct}%"></div></div>
+                </div>`;
+            });
+            kelengkapanContainer.innerHTML = kelHtml;
+
+            // 5. Statistik Pendidikan Terakhir
+            const pendMap = {};
+            aktifData.forEach(d => {
+                const p = (d["PENDIDIKAN"] || 'TIDAK DIKETAHUI').toUpperCase();
+                pendMap[p] = (pendMap[p] || 0) + 1;
+            });
+            const pendContainer = document.getElementById('statPendidikanContainer');
+            let pendHtml = '';
+            Object.keys(pendMap).sort().forEach(p => {
+                const cnt = pendMap[p];
+                pendHtml += `<div class="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 flex items-center justify-between transition-colors">
+                    <span class="font-semibold text-slate-700 dark:text-slate-300 text-xs">${p}</span>
+                    <span class="font-bold text-blue-600 dark:text-blue-400 text-sm">${cnt} jiwa</span>
+                </div>`;
+            });
+            pendContainer.innerHTML = pendHtml || '<div class="text-xs text-slate-400 dark:text-slate-500 text-center py-4 col-span-full">Belum ada data.</div>';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            if(window.lucide) lucide.createIcons();
+            
+            // Panggil fungsi sinkronisasi data otomatis dari Google Apps Script
+            loadDataFromAppsScript();
+        });
+    </script>
+</body>
+</html>
