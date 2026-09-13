@@ -146,16 +146,6 @@
                     <div class="text-xs text-slate-400 dark:text-slate-500 text-center py-4">Memuat data dari server...</div>
                 </div>
             </div>
-
-            <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm transition-colors duration-300">
-                <div>
-                    <h3 class="font-bold text-slate-900 dark:text-white text-sm">Kelengkapan Data Kolom Penting</h3>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Persentase pengisian atribut penting kependudukan</p>
-                </div>
-                <div id="statKelengkapanContainer" class="space-y-3">
-                    <div class="text-xs text-slate-400 dark:text-slate-500 text-center py-4">Memuat data dari server...</div>
-                </div>
-            </div>
         </div>
 
         <!-- STATISTIK DETAIL PENDIDIKAN -->
@@ -431,29 +421,6 @@
                 </div>`;
             });
             umurContainer.innerHTML = umurHtml;
-
-            // 4. Kelengkapan Data Kolom Penting
-            const fieldsToCheck = [
-                { key: 'NIK', label: 'NIK Terisi' },
-                { key: 'NO_KK', label: 'Nomor KK Terisi' },
-                { key: 'PEKERJAAN', label: 'Pekerjaan Terisi' },
-                { key: 'PENDIDIKAN', label: 'Pendidikan Terisi' }
-            ];
-            const kelengkapanContainer = document.getElementById('statKelengkapanContainer');
-            let kelHtml = '';
-            fieldsToCheck.forEach(f => {
-                let filled = 0;
-                aktifData.forEach(d => {
-                    const val = d[f.key];
-                    if(val && String(val).trim() !== '' && String(val).trim() !== '-') filled++;
-                });
-                const pct = totalWarga > 0 ? Math.round((filled / totalWarga) * 100) : 0;
-                kelHtml += `<div>
-                    <div class="flex justify-between text-xs mb-1"><span class="font-semibold text-slate-700 dark:text-slate-300">${f.label}</span><span class="text-slate-500 dark:text-slate-400">${pct}%</span></div>
-                    <div class="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden"><div class="bg-purple-600 dark:bg-purple-500 h-2 rounded-full transition-all duration-500" style="width: ${pct}%"></div></div>
-                </div>`;
-            });
-            kelengkapanContainer.innerHTML = kelHtml;
 
             // 5. Statistik Pendidikan Terakhir
             const pendMap = {};
