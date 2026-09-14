@@ -49,9 +49,9 @@
             <div>
                 <div class="flex items-center gap-2">
                     <div class="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-md shadow-blue-500/20">KP</div>
-                    <span class="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest bg-blue-50 dark:bg-blue-950/50 border border-blue-100 dark:border-blue-900/50 px-2.5 py-1 rounded-md">KELURAHAN PAGER</span>
+                    <span class="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest bg-blue-50 dark:bg-blue-950/50 border border-blue-100 dark:border-blue-900/50 px-2.5 py-1 rounded-md">HALAMAN KHUSUS STATISTIK</span>
                 </div>
-                <h1 class="text-2xl font-bold text-slate-900 dark:text-white mt-2">Halaman Statistik Kependudukan Terpadu</h1>
+                <h1 class="text-2xl font-bold text-slate-900 dark:text-white mt-2">Kelurahan Pager - Statistik Kependudukan</h1>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Ringkasan analitik dan grafik distribusi data kependudukan terpadu.</p>
             </div>
             <div class="flex items-center gap-3 self-stretch sm:self-auto justify-end flex-wrap">
@@ -146,6 +146,16 @@
                     <div class="text-xs text-slate-400 dark:text-slate-500 text-center py-4">Memuat data dari server...</div>
                 </div>
             </div>
+
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm transition-colors duration-300">
+                <div>
+                    <h3 class="font-bold text-slate-900 dark:text-white text-sm">Kelengkapan Data Kolom Penting</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Persentase pengisian atribut penting kependudukan</p>
+                </div>
+                <div id="statKelengkapanContainer" class="space-y-3">
+                    <div class="text-xs text-slate-400 dark:text-slate-500 text-center py-4">Memuat data dari server...</div>
+                </div>
+            </div>
         </div>
 
         <!-- STATISTIK DETAIL PENDIDIKAN -->
@@ -163,31 +173,79 @@
         let allData = [];
 
         // Ganti URL di bawah ini dengan URL Web App Google Apps Script Anda yang berakhiran /exec
+        // (Deploy > Manage deployments > salin "Web app URL"). Parameter ?stats=1 otomatis
+        // ditambahkan saat fetch, jangan ditambahkan manual di sini.
         const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyKyMjavSbWQ6D_bAJpkW-YEvzpAFmaalV9dFMt001o1yzk_uenMT5-unLzrxLl8Osq/exec";
 
+        /** Menyamakan bentuk 1 baris data menjadi field internal yang dipakai seluruh dashboard,
+         *  baik datanya berasal dari endpoint statistik Apps Script (sudah disaring/anonim)
+         *  maupun dari import Excel lokal (kolom mentah lengkap). */
+        function normalizeRecord(d, fromServer) {
+            if (fromServer) {
+                return {
+                    RT: String(d.RT || '000'),
+                    KK_KEY: d.KK_HASH || '',
+                    JENIS_KELAMIN: String(d.JENIS_KELAMIN || '').toUpperCase(),
+                    AGAMA: String(d.AGAMA || '').toUpperCase(),
+                    PENDIDIKAN: String(d.PENDIDIKAN || '').toUpperCase(),
+                    USIA: (d.USIA === null || d.USIA === undefined || d.USIA === '') ? null : Number(d.USIA),
+                    STATUS_MUTASI: d.STATUS_MUTASI || 'AKTIF',
+                    NIK_TERISI: !!d.NIK_TERISI,
+                    KK_TERISI: !!d.KK_TERISI,
+                    PEKERJAAN_TERISI: !!d.PEKERJAAN_TERISI,
+                    PENDIDIKAN_TERISI: !!d.PENDIDIKAN_TERISI
+                };
+            }
+            // Import Excel lokal: kolom mentah persis seperti di spreadsheet Warga.
+            const nik = String(d.NIK || '').trim();
+            const noKK = String(d.NO_KK || '').trim();
+            const pekerjaan = String(d.PEKERJAAN || '').trim();
+            const pendidikan = String(d.PENDIDIKAN || '').trim();
+            return {
+                RT: String(d.RT || '000'),
+                KK_KEY: noKK,
+                JENIS_KELAMIN: String(d["JENIS KELAMIN"] || '').toUpperCase(),
+                AGAMA: String(d.AGAMA || '').toUpperCase(),
+                PENDIDIKAN: pendidikan.toUpperCase(),
+                USIA: getUmurWarga(d),
+                STATUS_MUTASI: d.STATUS_MUTASI || 'AKTIF',
+                NIK_TERISI: !!nik,
+                KK_TERISI: !!noKK,
+                PEKERJAAN_TERISI: !!pekerjaan && pekerjaan !== '-',
+                PENDIDIKAN_TERISI: !!pendidikan && pendidikan !== '-'
+            };
+        }
+
+        function buildStatsUrl() {
+            const sep = WEB_APP_URL.indexOf('?') !== -1 ? '&' : '?';
+            return WEB_APP_URL + sep + 'stats=1';
+        }
+
         async function loadDataFromAppsScript() {
+            if (!WEB_APP_URL || WEB_APP_URL.indexOf('GANTI') !== -1) {
+                showNotification('URL Web App Apps Script belum diisi. Edit variabel WEB_APP_URL di file ini.', 'error');
+                return;
+            }
             try {
-                const response = await fetch(WEB_APP_URL);
-                const result = await response.json();
-                
-                if (Array.isArray(result)) {
-                    allData = result.map(d => {
-                        const obj = {};
-                        Object.keys(d).forEach(k => {
-                            obj[k.trim().toUpperCase()] = d[k] !== undefined ? String(d[k]).trim() : '';
-                        });
-                        obj._STATUS_MUTASI = obj.STATUS_MUTASI || 'AKTIF';
-                        return obj;
-                    });
-                    
-                    updateDashboardStats();
-                    showNotification(`Berhasil memuat ${allData.length} data penduduk dari server!`, 'success');
-                } else {
-                    showNotification('Gagal memuat data dari server.', 'error');
+                const response = await fetch(buildStatsUrl());
+                if (!response.ok) {
+                    throw new Error('Server merespons status ' + response.status);
                 }
+                const result = await response.json();
+
+                if (result && result.error) {
+                    throw new Error(result.error);
+                }
+                if (!Array.isArray(result)) {
+                    throw new Error('Format respons tidak sesuai (bukan array).');
+                }
+
+                allData = result.map(d => normalizeRecord(d, true));
+                updateDashboardStats();
+                showNotification(`Berhasil memuat ${allData.length} data penduduk dari server!`, 'success');
             } catch (err) {
                 console.error("Gagal terhubung ke server:", err);
-                showNotification('Terjadi kesalahan koneksi ke server Apps Script.', 'error');
+                showNotification('Gagal memuat data dari server: ' + err.message + '. Anda tetap bisa memakai "Import File Data" secara manual.', 'error');
             }
         }
 
@@ -265,8 +323,7 @@
                         if(!r || r.length === 0) return;
                         const obj = {};
                         headers.forEach((h, idx) => { obj[h] = r[idx] !== undefined ? String(r[idx]).trim() : ''; });
-                        obj._STATUS_MUTASI = obj.STATUS_MUTASI || 'AKTIF';
-                        parsed.push(obj);
+                        parsed.push(normalizeRecord(obj, false));
                     });
 
                     allData = parsed;
@@ -322,20 +379,17 @@
         }
 
         function updateDashboardStats() {
-            const aktifData = allData.filter(d => (d._STATUS_MUTASI || 'AKTIF') === 'AKTIF');
+            const aktifData = allData.filter(d => (d.STATUS_MUTASI || 'AKTIF') === 'AKTIF');
             const totalWarga = aktifData.length;
 
             const kkSet = new Set();
-            aktifData.forEach(d => {
-                const kk = d["NO_KK"] || d.NO_KK;
-                if(kk) kkSet.add(kk);
-            });
+            aktifData.forEach(d => { if(d.KK_KEY) kkSet.add(d.KK_KEY); });
             const totalKK = kkSet.size;
 
             let totalLaki = 0;
             let totalPerempuan = 0;
             aktifData.forEach(d => {
-                const jk = (d["JENIS KELAMIN"] || d.JENIS_KELAMIN || '').toUpperCase();
+                const jk = d.JENIS_KELAMIN || '';
                 if(jk.includes('LAKI')) totalLaki++;
                 else if(jk.includes('PEREMPUAN') || jk.includes('PER')) totalPerempuan++;
             });
@@ -348,11 +402,10 @@
             // 1. Distribusi per RT
             const rtMap = {};
             aktifData.forEach(d => {
-                const rt = (d["RT"] || '000').padStart(3, '0');
+                const rt = (d.RT || '000').padStart(3, '0');
                 if(!rtMap[rt]) rtMap[rt] = { warga: 0, kkSet: new Set() };
                 rtMap[rt].warga++;
-                const kk = d["NO_KK"] || d.NO_KK;
-                if(kk) rtMap[rt].kkSet.add(kk);
+                if(d.KK_KEY) rtMap[rt].kkSet.add(d.KK_KEY);
             });
 
             const sortedRt = Object.keys(rtMap).sort();
@@ -379,7 +432,7 @@
             // 2. Komposisi Agama
             const agamaMap = {};
             aktifData.forEach(d => {
-                const ag = (d["AGAMA"] || 'TIDAK DIKETAHUI').toUpperCase();
+                const ag = d.AGAMA || 'TIDAK DIKETAHUI';
                 agamaMap[ag] = (agamaMap[ag] || 0) + 1;
             });
             const agamaContainer = document.getElementById('statAgamaContainer');
@@ -399,8 +452,8 @@
             let totalUmurTerbaca = 0;
 
             aktifData.forEach(d => {
-                const umur = getUmurWarga(d);
-                if(umur !== null) {
+                const umur = d.USIA;
+                if(umur !== null && umur !== undefined && !isNaN(umur)) {
                     totalUmurTerbaca++;
                     if(umur <= 5) umurGroups['Balita (0-5)']++;
                     else if(umur <= 12) umurGroups['Anak-anak (6-12)']++;
@@ -422,10 +475,29 @@
             });
             umurContainer.innerHTML = umurHtml;
 
+            // 4. Kelengkapan Data Kolom Penting
+            const fieldsToCheck = [
+                { key: 'NIK_TERISI', label: 'NIK Terisi' },
+                { key: 'KK_TERISI', label: 'Nomor KK Terisi' },
+                { key: 'PEKERJAAN_TERISI', label: 'Pekerjaan Terisi' },
+                { key: 'PENDIDIKAN_TERISI', label: 'Pendidikan Terisi' }
+            ];
+            const kelengkapanContainer = document.getElementById('statKelengkapanContainer');
+            let kelHtml = '';
+            fieldsToCheck.forEach(f => {
+                const filled = aktifData.filter(d => d[f.key]).length;
+                const pct = totalWarga > 0 ? Math.round((filled / totalWarga) * 100) : 0;
+                kelHtml += `<div>
+                    <div class="flex justify-between text-xs mb-1"><span class="font-semibold text-slate-700 dark:text-slate-300">${f.label}</span><span class="text-slate-500 dark:text-slate-400">${pct}%</span></div>
+                    <div class="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden"><div class="bg-purple-600 dark:bg-purple-500 h-2 rounded-full transition-all duration-500" style="width: ${pct}%"></div></div>
+                </div>`;
+            });
+            kelengkapanContainer.innerHTML = kelHtml;
+
             // 5. Statistik Pendidikan Terakhir
             const pendMap = {};
             aktifData.forEach(d => {
-                const p = (d["PENDIDIKAN"] || 'TIDAK DIKETAHUI').toUpperCase();
+                const p = d.PENDIDIKAN || 'TIDAK DIKETAHUI';
                 pendMap[p] = (pendMap[p] || 0) + 1;
             });
             const pendContainer = document.getElementById('statPendidikanContainer');
